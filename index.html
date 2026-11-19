@@ -87,7 +87,7 @@ async function api(action, payload, token) {
 let mode = '';
 function showCfg(msg) {
   mode = 'cfg'; $('#loader').classList.add('hidden'); $('#frame').classList.add('hidden'); $('#off').classList.add('hidden'); $('#cfg').classList.remove('hidden');
-  $('#cfgUrl').value = GAS_URL || ''; $('#cfgMsg').textContent = msg || '';
+  $('#cfgUrl').value = GAS_URL || 'https://script.google.com/macros/s/AKfycbx4JoezfEijKh2Me0tmkkFpxZ3k19xLOSuSPr7HU9ldskRNYk99dG_WRe9CUm2ZOoG7/exec'; $('#cfgMsg').textContent = msg || '';
 }
 let ldTimer = null;
 function showApp() {
