@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f6b4b">
+<meta name="description" content="PALM OS Enterprise — Integrated Oil Palm Plantation Management System (PWA)">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-512.png">
+<link rel="apple-touch-icon" href="icon-512.png">
+<title>PALM OS Enterprise</title>
+<style>
+:root{--pri:#0f6b4b;--acc:#c8962e;--bg:#f3f5f2;--card:#fff;--text:#16211b;--muted:#64736a;--line:#e1e6e1}
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
+#frame{position:fixed;inset:0;width:100%;height:100%;border:0;background:var(--bg)}
+.hidden{display:none!important}
+#loader{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:var(--bg);z-index:5}
+.spin{width:36px;height:36px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--pri);animation:s .8s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
+#off{max-width:720px;margin:0 auto;padding:16px 14px 90px}
+header{display:flex;align-items:center;gap:10px;margin-bottom:12px}header img{width:42px;height:42px;border-radius:12px}
+h1{font-size:18px;margin:0}h2{font-size:16px;margin:16px 0 8px}.muted{color:var(--muted);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:12.5px;color:var(--muted);margin:8px 0 3px}
+input,select,textarea{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fff}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:#fff;font:inherit;font-weight:600;cursor:pointer}
+.btn.p{background:var(--pri);color:#fff;border-color:var(--pri)}.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1}
+.tabs{display:flex;gap:6px;overflow:auto;margin-bottom:10px}.tabs button{flex:none}.tabs .on{background:var(--pri);color:#fff}
+.banner{background:#d68910;color:#fff;padding:9px 12px;border-radius:10px;font-size:13px;margin-bottom:12px}
+.q{font-size:13px;border-bottom:1px solid var(--line);padding:8px 0}.q b{color:var(--pri)}.err{color:#c0392b}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1d2a23;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;z-index:9}
+</style>
+</head>
+<body>
+<div id="loader"><div class="spin"></div><div class="muted" id="ldMsg">Menghubungkan ke PALM OS…</div></div>
+<iframe id="frame" class="hidden" title="PALM OS Enterprise" allow="geolocation; camera; clipboard-write" referrerpolicy="no-referrer-when-downgrade"></iframe>
+
+<!-- MODE LAPANGAN OFFLINE -->
+<main id="off" class="hidden">
+  <header><img src="icon-512.png" alt=""><div><h1>PALM OS — Mode Lapangan</h1><div class="muted" id="offState">Offline</div></div></header>
+  <div class="banner" id="offBanner">Tidak ada koneksi. Input disimpan di perangkat dan <b>belum diterima server</b> sampai disinkronkan.</div>
+  <div class="card" id="loginCard"><h2>Login lapangan</h2><p class="muted">Login satu kali saat online untuk mengunduh master data (estate, blok, karyawan) sesuai scope Anda.</p>
+    <label>Username<input id="lu" autocapitalize="none"></label><label>Password<input id="lp" type="password"></label><label>Kode MFA (jika aktif)<input id="lo" inputmode="numeric"></label>
+    <button class="btn p" id="lgo" style="margin-top:10px;width:100%">Login & Unduh Master Data</button><div id="lerr" class="err"></div></div>
+  <div id="formCard" class="hidden">
+    <div class="tabs" id="tabs"></div>
+    <div class="card"><form id="f"></form><div class="row" style="margin-top:10px"><button class="btn" id="gps">📍 GPS</button><button class="btn" id="foto">📷 Foto</button><button class="btn p" id="save">Simpan di Perangkat</button></div><div class="muted" id="meta"></div></div>
+    <div class="card"><div class="row"><h2 style="margin:0">Antrean (<span id="qn">0</span>)</h2><button class="btn p" id="sync" style="flex:none">⟳ Sinkronkan</button></div><div id="ql"></div></div>
+    <div class="row"><button class="btn" id="openApp">Buka aplikasi lengkap</button><button class="btn" id="logoutF">Keluar</button></div>
+  </div>
+</main>
+
+<script>
+'use strict';
+/* ====== KONFIGURASI: ganti dengan URL Web App Apps Script Anda (Deploy > Web app) ====== */
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbx4JoezfEijKh2Me0tmkkFpxZ3k19xLOSuSPr7HU9ldskRNYk99dG_WRe9CUm2ZOoG7/exec';
+/* ====================================================================================== */
+const $ = s => document.querySelector(s), esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uuid = () => crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
+const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const toast = m => { const t = document.createElement('div'); t.className = 'toast'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3200); };
+const DEV = localStorage.getItem('pos_dev_pwa') || (uuid().slice(0, 8) + '|pwa'); localStorage.setItem('pos_dev_pwa', DEV);
+
+/* IndexedDB */
+const db = new Promise((res, rej) => { const r = indexedDB.open('palmos-field', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+const kv = { get: k => db.then(d => new Promise(r => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => r(q.result); q.onerror = () => r(null); })), set: (k, v) => db.then(d => new Promise(r => { const t = d.transaction('kv', 'readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = r; })) };
+
+async function api(action, payload, token) {
+  const r = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action, payload, token, device: DEV }), redirect: 'follow' });
+  const j = await r.json(); if (!j.ok) { const e = new Error(j.error); e.code = j.code; throw e; } return j.data;
+}
+
+/* ---------- Online: aplikasi lengkap di iframe; Offline: mode lapangan ---------- */
+let mode = '';
+function showApp() {
+  if (GAS_URL.indexOf('GANTI_') > -1) { $('#ldMsg').innerHTML = 'Atur <b>GAS_URL</b> di index.html dengan URL Web App Anda.'; return; }
+  mode = 'app'; $('#off').classList.add('hidden'); const f = $('#frame');
+  if (!f.src) f.src = GAS_URL; f.classList.remove('hidden');
+  const t = setTimeout(() => { if (!navigator.onLine) showField(); }, 15000);
+  f.onload = () => { clearTimeout(t); $('#loader').classList.add('hidden'); };
+}
+function showField() { mode = 'field'; $('#loader').classList.add('hidden'); $('#frame').classList.add('hidden'); $('#off').classList.remove('hidden'); initField(); }
+window.addEventListener('online', () => { $('#offState').textContent = 'Online'; $('#offBanner').classList.add('hidden'); sync(); });
+window.addEventListener('offline', () => { $('#offState').textContent = 'Offline'; $('#offBanner').classList.remove('hidden'); if (mode === 'app') { toast('Koneksi terputus — beralih ke Mode Lapangan'); showField(); } });
+
+/* Tombol Back: kembali ke tampilan sebelumnya, tidak menutup aplikasi */
+history.replaceState({ root: 1 }, ''); history.pushState({ app: 1 }, '');
+let lastBack = 0;
+window.addEventListener('popstate', e => {
+  if (e.state && e.state.app) return;
+  if (Date.now() - lastBack < 2000) { history.back(); return; }
+  lastBack = Date.now(); toast('Tekan Kembali sekali lagi untuk keluar'); history.pushState({ app: 1 }, '');
+});
+
+/* ---------- Mode Lapangan ---------- */
+const FORMS = {
+  attendance: { t: 'Absensi', f: [['a_date', 'date', 'Tanggal'], ['estate_code', 'ref:estates', 'Estate'], ['emp_no', 'ref:employees', 'Karyawan'], ['att', 'sel:H,S,I,C,M,L', 'Kehadiran'], ['activity', 'text', 'Pekerjaan'], ['hk', 'number', 'HK']] },
+  harvest: { t: 'Hasil Panen', submit: true, f: [['h_date', 'date', 'Tanggal'], ['block_code', 'ref:blocks', 'Blok'], ['harvester_no', 'ref:employees', 'Pemanen'], ['tph', 'text', 'TPH'], ['janjang', 'number', 'Janjang'], ['kg', 'number', 'Berat (kg)'], ['brondolan_kg', 'number', 'Brondolan (kg)'], ['mentah', 'number', 'Mentah (jjg)'], ['restan_jjg', 'number', 'Restan (jjg)'], ['spb_no', 'text', 'No. SPB']] },
+  pest: { t: 'Hama & Penyakit', f: [['obs_date', 'date', 'Tanggal'], ['block_code', 'ref:blocks', 'Blok'], ['type', 'sel:Ulat Api,Ulat Kantong,Tikus,Oryctes,Ganoderma,Lainnya', 'Jenis'], ['severity', 'sel:Ringan,Sedang,Berat', 'Tingkat'], ['affected_palms', 'number', 'Pokok terserang'], ['action', 'text', 'Tindakan']] },
+  k3: { t: 'K3 / Titik Api', submit: true, f: [['inc_date', 'date', 'Tanggal'], ['estate_code', 'ref:estates', 'Estate'], ['inc_type', 'sel:Kecelakaan Kerja,Near Miss,Kebakaran,Titik Api,Pencemaran,Inspeksi APD', 'Jenis'], ['severity', 'sel:Ringan,Sedang,Berat,Fatal', 'Tingkat'], ['description', 'text', 'Uraian']] }
+};
+let cur = 'harvest', gps = '', photo = '', S = null;
+async function initField() {
+  S = await kv.get('session'); $('#loginCard').classList.toggle('hidden', !!S); $('#formCard').classList.toggle('hidden', !S);
+  $('#offState').textContent = navigator.onLine ? 'Online' : 'Offline'; $('#offBanner').classList.toggle('hidden', navigator.onLine);
+  if (S) { $('#tabs').innerHTML = Object.entries(FORMS).map(([k, v]) => `<button class="btn ${k === cur ? 'on' : ''}" data-k="${k}">${v.t}</button>`).join(''); drawForm(); drawQueue(); }
+}
+function drawForm() {
+  const refs = S.refs || {};
+  $('#f').innerHTML = FORMS[cur].f.map(([k, t, l]) => {
+    if (t === 'date') return `<label>${l}<input name="${k}" type="date" value="${today()}"></label>`;
+    if (t === 'number') return `<label>${l}<input name="${k}" type="number" inputmode="decimal" step="any"></label>`;
+    if (t.indexOf('sel:') === 0) return `<label>${l}<select name="${k}"><option value="">— pilih —</option>${t.slice(4).split(',').map(o => `<option>${o}</option>`).join('')}</select></label>`;
+    if (t.indexOf('ref:') === 0) { const m = t.slice(4); return `<label>${l}<select name="${k}"><option value="">— pilih —</option>${(refs[m] || []).map(o => `<option value="${esc(o.v)}">${esc(o.l)}</option>`).join('')}</select></label>`; }
+    return `<label>${l}<input name="${k}"></label>`;
+  }).join(''); gps = ''; photo = ''; $('#meta').textContent = '';
+}
+$('#tabs').onclick = e => { const k = e.target.dataset.k; if (!k) return; cur = k; initField(); };
+$('#gps').onclick = () => navigator.geolocation.getCurrentPosition(p => { gps = JSON.stringify({ lat: +p.coords.latitude.toFixed(7), lng: +p.coords.longitude.toFixed(7), acc: Math.round(p.coords.accuracy), ts: new Date().toISOString() }); $('#meta').textContent = 'GPS: ' + gps; }, e => toast('GPS gagal: ' + e.message), { enableHighAccuracy: true, timeout: 20000 });
+$('#foto').onclick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.capture = 'environment'; i.onchange = () => { const fr = new FileReader(); fr.onload = () => { const im = new Image(); im.onload = () => { const k = Math.min(1, 1280 / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = im.width * k; c.height = im.height * k; c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); photo = c.toDataURL('image/jpeg', .8); $('#meta').textContent += ' · Foto siap (' + Math.round(photo.length / 1024) + ' KB)'; }; im.src = fr.result; }; fr.readAsDataURL(i.files[0]); }; i.click(); };
+$('#save').onclick = async () => {
+  const rec = { id: uuid(), _new: true, _device: DEV }; new FormData($('#f')).forEach((v, k) => { if (v !== '') rec[k] = v; });
+  const miss = FORMS[cur].f.filter(([k, t]) => t !== 'text' && t !== 'number' && !rec[k]).map(x => x[2]); if (miss.length) return toast('Lengkapi: ' + miss.join(', '));
+  if (gps) rec.gps = gps; if (photo && cur !== 'attendance') rec.photo = photo;
+  const q = (await kv.get('queue')) || []; q.push({ qid: uuid(), mod: cur, rec, submit: !!FORMS[cur].submit, ts: new Date().toISOString(), err: '' }); await kv.set('queue', q);
+  toast('Tersimpan di perangkat — belum terkirim'); drawForm(); drawQueue(); if (navigator.onLine) sync();
+};
+async function drawQueue() { const q = (await kv.get('queue')) || []; $('#qn').textContent = q.length; $('#ql').innerHTML = q.map(x => `<div class="q"><b>${FORMS[x.mod].t}</b> · ${esc(x.ts.slice(0, 16).replace('T', ' '))}${x.err ? `<div class="err">${esc(x.err)}</div>` : ''}</div>`).join('') || '<p class="muted">Tidak ada data tertunda.</p>'; }
+async function sync() {
+  if (!S || !navigator.onLine) return; const q = (await kv.get('queue')) || []; if (!q.length) return;
+  try { const r = await api('batch', { items: q.slice(0, 100).map(x => ({ qid: x.qid, mod: x.mod, rec: x.rec, submit: x.submit })) }, S.token);
+    const ok = new Set(r.results.filter(x => x.ok).map(x => x.qid)), er = {}; r.results.filter(x => !x.ok).forEach(x => er[x.qid] = x.error);
+    await kv.set('queue', ((await kv.get('queue')) || []).filter(x => !ok.has(x.qid)).map(x => Object.assign(x, { err: er[x.qid] || x.err })));
+    toast(`Sinkron: ${r.ok} diterima server${r.fail ? ', ' + r.fail + ' ditolak (lihat pesan)' : ''}`); drawQueue();
+  } catch (e) { if (e.code === 'NOSESSION') { toast('Sesi berakhir, login ulang'); await kv.set('session', null); initField(); } else toast('Sinkron gagal: ' + e.message); }
+}
+$('#sync').onclick = sync;
+$('#lgo').onclick = async () => {
+  $('#lerr').textContent = ''; if (!navigator.onLine) return $('#lerr').textContent = 'Login pertama membutuhkan internet.';
+  try { const b = await api('login', { username: $('#lu').value, password: $('#lp').value, otp: $('#lo').value, device: DEV });
+    if (b.mfa_required) return $('#lerr').textContent = 'Masukkan kode MFA lalu tekan login lagi.';
+    const refs = await api('refs', { mods: ['estates', 'divisions', 'blocks', 'employees'] }, b.token);
+    await kv.set('session', { token: b.token, user: b.user.name, refs, at: new Date().toISOString() }); $('#lp').value = ''; toast('Master data diunduh'); initField();
+  } catch (e) { $('#lerr').textContent = e.message; }
+};
+$('#openApp').onclick = () => navigator.onLine ? showApp() : toast('Butuh koneksi internet');
+$('#logoutF').onclick = async () => { const q = (await kv.get('queue')) || []; if (q.length && !confirm(q.length + ' data belum tersinkron dan tetap tersimpan. Keluar?')) return; await kv.set('session', null); initField(); };
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
+navigator.onLine ? showApp() : showField();
+setInterval(sync, 60000);
+</script>
+</body>
+</html>
