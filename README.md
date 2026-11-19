@@ -18,7 +18,7 @@ Repositori ini berisi **cangkang PWA** untuk PALM OS Enterprise. Aplikasi utama 
 ## Cara pasang
 
 1. Deploy Apps Script sebagai **Web app** (Execute as: *Me*, Who has access: *Anyone*). Salin URL `.../exec`.
-2. Edit `index.html`, ganti `GAS_URL` dengan URL tersebut.
+2. Atur URL Web App dengan salah satu cara: (a) buka aplikasi → layar **Atur URL** → tempel URL → Simpan (tersimpan di perangkat); (b) isi `content` pada tag `<meta name="palmos-gas-url">` di `index.html` (berlaku untuk semua pengguna); atau (c) bagikan tautan `https://<username>.github.io/palm-os/?gas=<URL_WEB_APP>`.
 3. Upload 5 berkas ke repositori GitHub, mis. `palm-os`, lalu **Settings → Pages → Deploy from branch → main / root**.
 4. Buka `https://<username>.github.io/palm-os/` → menu browser → **Install app / Tambahkan ke layar utama**.
 
@@ -28,6 +28,10 @@ Repositori ini berisi **cangkang PWA** untuk PALM OS Enterprise. Aplikasi utama 
 - Setiap data memakai ID unik dari perangkat, sehingga pengiriman ulang **tidak membuat duplikat** (idempotensi di server).
 - Data yang ditolak validasi server (mis. blok bukan milik afdeling, duplikat) tetap di antrean dengan pesan kesalahan agar dapat diperbaiki.
 - Tombol **Back** di Android/browser kembali ke tampilan sebelumnya; menekan Back dua kali cepat di layar utama baru keluar dari aplikasi.
+
+## Bila tidak terbuka
+
+Jika server tidak merespons dalam 20 detik, layar menampilkan tombol **Buka di tab baru**, **Mode Lapangan**, **Atur URL**, dan **Coba lagi**. Setelah memperbarui berkas di GitHub, muat ulang dengan Ctrl+F5 (Service Worker memakai versi cache `palmos-pwa-v1.0.2`).
 
 ## Catatan teknis
 
